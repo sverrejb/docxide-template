@@ -82,7 +82,9 @@ pub mod __private {
 
         let mut output_buf = Cursor::new(Vec::new());
         let mut zip_writer = zip::write::ZipWriter::new(&mut output_buf);
-        let options = zip::write::SimpleFileOptions::default();
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .compression_level(Some(6));
 
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
@@ -120,7 +122,11 @@ pub mod __private {
 }
 
 fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 fn replace_placeholders_in_xml(xml: &str, replacements: &[(&str, &str)]) -> String {
@@ -446,6 +452,12 @@ mod tests {
 
         let result = replace_placeholders_in_xml(xml, &[("{Name}", "a < b & c > d")]);
         assert_eq!(result, r#"<w:t>a &lt; b &amp; c &gt; d</w:t>"#);
+
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", r#"She said "hello""#)]);
+        assert_eq!(result, r#"<w:t>She said &quot;hello&quot;</w:t>"#);
+
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "it's")]);
+        assert_eq!(result, r#"<w:t>it&apos;s</w:t>"#);
     }
 
     #[test]

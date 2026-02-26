@@ -125,6 +125,27 @@ mod tests {
         assert_eq!(c.page_num, "7");
     }
 
+    // -- Text box placeholders --
+
+    #[test]
+    fn textbox_template_struct_has_textbox_field() {
+        let t = TextboxTemplate::new("Alice", "Widget", "Boxed");
+        assert_eq!(t.first_name, "Alice");
+        assert_eq!(t.product_name, "Widget");
+        assert_eq!(t.textbox_field, "Boxed");
+    }
+
+    #[test]
+    fn textbox_template_to_bytes_replaces() {
+        let t = TextboxTemplate::new("Alice", "Widget", "Boxed");
+        let bytes = t.to_bytes().unwrap();
+        let xml = read_zip_entry(&bytes, "word/document.xml");
+        assert!(xml.contains("Boxed"), "textbox_field not replaced");
+        assert!(!xml.contains("textbox_field"), "placeholder still present");
+    }
+
+    // -- Combined areas --
+
     #[test]
     fn combined_areas_to_bytes_replaces_all() {
         let c = CombinedAreas::new("Bob", "Item", "100", "Report", "7");

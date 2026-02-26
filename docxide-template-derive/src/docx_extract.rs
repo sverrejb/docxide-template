@@ -1,6 +1,7 @@
 use docx_rs::{
-    DocumentChild, FooterChild, HeaderChild, StructuredDataTagChild, Table, TableCellContent,
-    TableChild, TableRowChild,
+    DocumentChild, DrawingData, FooterChild, HeaderChild, Paragraph, ParagraphChild, RunChild,
+    StructuredDataTagChild, Table, TableCellContent, TableChild, TableRowChild,
+    TextBoxContentChild,
 };
 use file_format::FileFormat;
 use std::path::Path;
@@ -9,7 +10,7 @@ pub(crate) fn collect_text_from_document_children(children: Vec<DocumentChild>) 
     let mut texts = Vec::new();
     for child in children {
         match child {
-            DocumentChild::Paragraph(p) => texts.push(p.raw_text()),
+            DocumentChild::Paragraph(p) => texts.extend(collect_text_from_paragraph(&p)),
             DocumentChild::Table(t) => texts.extend(collect_text_from_table(&t)),
             DocumentChild::StructuredDataTag(sdt) => {
                 texts.extend(collect_text_from_sdt_children(&sdt.children));
@@ -28,7 +29,7 @@ pub(crate) fn collect_text_from_table(table: &Table) -> Vec<String> {
             let TableRowChild::TableCell(ref cell) = cell;
             for content in &cell.children {
                 match content {
-                    TableCellContent::Paragraph(p) => texts.push(p.raw_text()),
+                    TableCellContent::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
                     TableCellContent::Table(t) => texts.extend(collect_text_from_table(t)),
                     _ => {}
                 }
@@ -42,7 +43,7 @@ fn collect_text_from_sdt_children(children: &[StructuredDataTagChild]) -> Vec<St
     let mut texts = Vec::new();
     for child in children {
         match child {
-            StructuredDataTagChild::Paragraph(p) => texts.push(p.raw_text()),
+            StructuredDataTagChild::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
             StructuredDataTagChild::Table(t) => texts.extend(collect_text_from_table(t)),
             StructuredDataTagChild::StructuredDataTag(sdt) => {
                 texts.extend(collect_text_from_sdt_children(&sdt.children));
@@ -57,7 +58,7 @@ pub(crate) fn collect_text_from_header_children(children: &[HeaderChild]) -> Vec
     let mut texts = Vec::new();
     for child in children {
         match child {
-            HeaderChild::Paragraph(p) => texts.push(p.raw_text()),
+            HeaderChild::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
             HeaderChild::Table(t) => texts.extend(collect_text_from_table(t)),
             HeaderChild::StructuredDataTag(sdt) => {
                 texts.extend(collect_text_from_sdt_children(&sdt.children));
@@ -71,11 +72,64 @@ pub(crate) fn collect_text_from_footer_children(children: &[FooterChild]) -> Vec
     let mut texts = Vec::new();
     for child in children {
         match child {
-            FooterChild::Paragraph(p) => texts.push(p.raw_text()),
+            FooterChild::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
             FooterChild::Table(t) => texts.extend(collect_text_from_table(t)),
             FooterChild::StructuredDataTag(sdt) => {
                 texts.extend(collect_text_from_sdt_children(&sdt.children));
             }
+        }
+    }
+    texts
+}
+
+fn collect_text_from_paragraph(p: &Paragraph) -> Vec<String> {
+    let mut texts = vec![p.raw_text()];
+    for child in &p.children {
+        let runs: Vec<&RunChild> = match child {
+            ParagraphChild::Run(run) => run.children.iter().collect(),
+            ParagraphChild::Insert(ins) => ins
+                .children
+                .iter()
+                .filter_map(|c| {
+                    if let docx_rs::InsertChild::Run(r) = c {
+                        Some(r.children.iter())
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect(),
+            ParagraphChild::Hyperlink(h) => h
+                .children
+                .iter()
+                .filter_map(|c| {
+                    if let ParagraphChild::Run(r) = c {
+                        Some(r.children.iter())
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect(),
+            _ => continue,
+        };
+        for run_child in runs {
+            if let RunChild::Drawing(drawing) = run_child {
+                if let Some(DrawingData::TextBox(text_box)) = &drawing.data {
+                    texts.extend(collect_text_from_textbox_content(&text_box.children));
+                }
+            }
+        }
+    }
+    texts
+}
+
+fn collect_text_from_textbox_content(children: &[TextBoxContentChild]) -> Vec<String> {
+    let mut texts = Vec::new();
+    for child in children {
+        match child {
+            TextBoxContentChild::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
+            TextBoxContentChild::Table(t) => texts.extend(collect_text_from_table(t)),
         }
     }
     texts
