@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn duplicate_replacement_does_not_break_later_spans() {
-        // Simulates the pre-dedup bug: {header} appears twice in replacements
+        // {header} appears twice in replacements
         let xml = concat!(
             r#"<w:t>{header}</w:t>"#,
             r#"<w:t>{header}</w:t>"#,
@@ -373,7 +373,7 @@ mod tests {
         let result = replace_placeholders_in_xml(
             xml,
             &[
-                // duplicate {header} — the old bug
+                // duplicate {header}
                 ("{header}", "TITLE"),
                 ("{header}", "TITLE"),
                 ("{foo}", "BAR"),

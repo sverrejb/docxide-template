@@ -1,4 +1,5 @@
 use docxide_template::generate_templates;
+use docxide_pdf::convert_docx_bytes_to_pdf;
 
 generate_templates!("test-crate/templates");
 
@@ -11,9 +12,10 @@ fn main() {
     table.save("test-crate/output/table_placeholders").unwrap();
     println!("Saved table_placeholders.docx");
 
-    let hf = HeadFootTest::new("My Report", "42", "This goes on top", "This goes down below");
-    hf.save("test-crate/output/header_footer_placeholders").unwrap();
-    println!("Saved header_footer_placeholders.docx");
+    let hf = HeadFootTest::new("My FooBarLOL", "droop", "Boom", "This goes down below");
+    let hf_bytes = hf.to_bytes().unwrap();
+    convert_docx_bytes_to_pdf(&hf_bytes, "test-crate/output/hello_world.pdf").unwrap();
+    println!("Saved hello_world.pdf");
 
     let combined = CombinedAreas::new("Bob", "Item", "100", "Quarterly Report", "7");
     combined.save("test-crate/output/combined_areas").unwrap();

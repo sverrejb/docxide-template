@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+docxide-pdf = { path = "../../docxside-pdf" }
 docxide-template = { path = "../docxide-template" }
 
 [dev-dependencies]
