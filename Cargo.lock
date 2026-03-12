@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "docxide-template"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "docxide-template-derive",
  "zip 8.1.0",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "docxide-template-derive"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "docx-rs",
  "file-format",
