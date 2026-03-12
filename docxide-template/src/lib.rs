@@ -502,6 +502,426 @@ mod tests {
     }
 
     #[test]
+    fn replace_in_table_cell_xml() {
+        let xml = concat!(
+            r#"<w:tbl><w:tr><w:tc>"#,
+            r#"<w:tcPr><w:tcW w:w="4680" w:type="dxa"/></w:tcPr>"#,
+            r#"<w:p><w:r><w:t>{Name}</w:t></w:r></w:p>"#,
+            r#"</w:tc></w:tr></w:tbl>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("Alice"), "placeholder in table cell not replaced: {}", result);
+        assert!(!result.contains("{Name}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_nested_table_xml() {
+        let xml = concat!(
+            r#"<w:tbl><w:tr><w:tc>"#,
+            r#"<w:tbl><w:tr><w:tc>"#,
+            r#"<w:p><w:r><w:t>{Inner}</w:t></w:r></w:p>"#,
+            r#"</w:tc></w:tr></w:tbl>"#,
+            r#"</w:tc></w:tr></w:tbl>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Inner}", "Nested")]);
+        assert!(result.contains("Nested"), "placeholder in nested table not replaced: {}", result);
+        assert!(!result.contains("{Inner}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_multiple_cells_same_row() {
+        let xml = concat!(
+            r#"<w:tbl><w:tr>"#,
+            r#"<w:tc><w:p><w:r><w:t>{First}</w:t></w:r></w:p></w:tc>"#,
+            r#"<w:tc><w:p><w:r><w:t>{Last}</w:t></w:r></w:p></w:tc>"#,
+            r#"<w:tc><w:p><w:r><w:t>{Age}</w:t></w:r></w:p></w:tc>"#,
+            r#"</w:tr></w:tbl>"#,
+        );
+        let result = replace_placeholders_in_xml(
+            xml,
+            &[("{First}", "Alice"), ("{Last}", "Smith"), ("{Age}", "30")],
+        );
+        assert!(result.contains("Alice"), "First not replaced: {}", result);
+        assert!(result.contains("Smith"), "Last not replaced: {}", result);
+        assert!(result.contains("30"), "Age not replaced: {}", result);
+        assert!(!result.contains("{First}") && !result.contains("{Last}") && !result.contains("{Age}"),
+            "placeholders still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_footnote_xml() {
+        let xml = concat!(
+            r#"<w:footnotes>"#,
+            r#"<w:footnote w:type="normal" w:id="1">"#,
+            r#"<w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr>"#,
+            r#"<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteRef/></w:r>"#,
+            r#"<w:r><w:t xml:space="preserve"> </w:t></w:r>"#,
+            r#"<w:r><w:t>{Source}</w:t></w:r>"#,
+            r#"</w:p>"#,
+            r#"</w:footnote>"#,
+            r#"</w:footnotes>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Source}", "Wikipedia")]);
+        assert!(result.contains("Wikipedia"), "placeholder in footnote not replaced: {}", result);
+        assert!(!result.contains("{Source}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_endnote_xml() {
+        let xml = concat!(
+            r#"<w:endnotes>"#,
+            r#"<w:endnote w:type="normal" w:id="1">"#,
+            r#"<w:p><w:pPr><w:pStyle w:val="EndnoteText"/></w:pPr>"#,
+            r#"<w:r><w:rPr><w:rStyle w:val="EndnoteReference"/></w:rPr><w:endnoteRef/></w:r>"#,
+            r#"<w:r><w:t xml:space="preserve"> </w:t></w:r>"#,
+            r#"<w:r><w:t>{Citation}</w:t></w:r>"#,
+            r#"</w:p>"#,
+            r#"</w:endnote>"#,
+            r#"</w:endnotes>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Citation}", "Doe, 2024")]);
+        assert!(result.contains("Doe, 2024"), "placeholder in endnote not replaced: {}", result);
+        assert!(!result.contains("{Citation}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_comment_xml() {
+        let xml = concat!(
+            r#"<w:comments>"#,
+            r#"<w:comment w:id="0" w:author="Author" w:date="2024-01-01T00:00:00Z">"#,
+            r#"<w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>"#,
+            r#"<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>"#,
+            r#"<w:r><w:t>{ReviewNote}</w:t></w:r>"#,
+            r#"</w:p>"#,
+            r#"</w:comment>"#,
+            r#"</w:comments>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{ReviewNote}", "Approved")]);
+        assert!(result.contains("Approved"), "placeholder in comment not replaced: {}", result);
+        assert!(!result.contains("{ReviewNote}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_sdt_xml() {
+        let xml = concat!(
+            r#"<w:sdt>"#,
+            r#"<w:sdtPr><w:alias w:val="Title"/></w:sdtPr>"#,
+            r#"<w:sdtContent>"#,
+            r#"<w:p><w:r><w:t>{Title}</w:t></w:r></w:p>"#,
+            r#"</w:sdtContent>"#,
+            r#"</w:sdt>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Title}", "Report")]);
+        assert!(result.contains("Report"), "placeholder in sdt not replaced: {}", result);
+        assert!(!result.contains("{Title}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_hyperlink_display_text() {
+        let xml = concat!(
+            r#"<w:p>"#,
+            r#"<w:hyperlink r:id="rId5" w:history="1">"#,
+            r#"<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr>"#,
+            r#"<w:t>{LinkText}</w:t></w:r>"#,
+            r#"</w:hyperlink>"#,
+            r#"</w:p>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{LinkText}", "Click here")]);
+        assert!(result.contains("Click here"), "placeholder in hyperlink not replaced: {}", result);
+        assert!(!result.contains("{LinkText}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_in_textbox_xml() {
+        let xml = concat!(
+            r#"<wps:txbx>"#,
+            r#"<w:txbxContent>"#,
+            r#"<w:p><w:pPr><w:jc w:val="center"/></w:pPr>"#,
+            r#"<w:r><w:rPr><w:b/></w:rPr><w:t>{BoxTitle}</w:t></w:r>"#,
+            r#"</w:p>"#,
+            r#"</w:txbxContent>"#,
+            r#"</wps:txbx>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{BoxTitle}", "Important")]);
+        assert!(result.contains("Important"), "placeholder in textbox not replaced: {}", result);
+        assert!(!result.contains("{BoxTitle}"), "placeholder still present: {}", result);
+    }
+
+    #[test]
+    fn replace_placeholder_split_across_three_runs() {
+        let xml = concat!(
+            r#"<w:r><w:t>{pl</w:t></w:r>"#,
+            r#"<w:r><w:t>ace</w:t></w:r>"#,
+            r#"<w:r><w:t>holder}</w:t></w:r>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{placeholder}", "value")]);
+        assert!(result.contains("value"), "placeholder split across 3 runs not replaced: {}", result);
+        assert!(!result.contains("{pl"), "leftover fragment: {}", result);
+        assert!(!result.contains("holder}"), "leftover fragment: {}", result);
+    }
+
+    #[test]
+    fn replace_placeholder_split_across_four_runs() {
+        let xml = concat!(
+            r#"<w:r><w:t>{p</w:t></w:r>"#,
+            r#"<w:r><w:t>la</w:t></w:r>"#,
+            r#"<w:r><w:t>ceh</w:t></w:r>"#,
+            r#"<w:r><w:t>older}</w:t></w:r>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{placeholder}", "value")]);
+        assert!(result.contains("value"), "placeholder split across 4 runs not replaced: {}", result);
+        assert!(!result.contains("placeholder"), "leftover fragment: {}", result);
+    }
+
+    #[test]
+    fn replace_adjacent_placeholders_no_space() {
+        let xml = r#"<w:r><w:t>{first}{last}</w:t></w:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{first}", "Alice"), ("{last}", "Smith")]);
+        assert_eq!(result, r#"<w:r><w:t>AliceSmith</w:t></w:r>"#);
+    }
+
+    #[test]
+    fn replace_with_bookmark_markers_between_runs() {
+        let xml = concat!(
+            r#"<w:r><w:t>{Na</w:t></w:r>"#,
+            r#"<w:bookmarkStart w:id="0" w:name="bookmark1"/>"#,
+            r#"<w:r><w:t>me}</w:t></w:r>"#,
+            r#"<w:bookmarkEnd w:id="0"/>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("Alice"), "placeholder with bookmark between runs not replaced: {}", result);
+        assert!(!result.contains("{Na"), "leftover fragment: {}", result);
+        assert!(result.contains("w:bookmarkStart"), "bookmark markers should be preserved: {}", result);
+    }
+
+    #[test]
+    fn replace_with_comment_markers_between_runs() {
+        let xml = concat!(
+            r#"<w:r><w:t>{Na</w:t></w:r>"#,
+            r#"<w:commentRangeStart w:id="1"/>"#,
+            r#"<w:r><w:t>me}</w:t></w:r>"#,
+            r#"<w:commentRangeEnd w:id="1"/>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("Alice"), "placeholder with comment markers between runs not replaced: {}", result);
+        assert!(!result.contains("{Na"), "leftover fragment: {}", result);
+        assert!(result.contains("w:commentRangeStart"), "comment markers should be preserved: {}", result);
+    }
+
+    #[test]
+    fn replace_with_formatting_props_between_runs() {
+        let xml = concat!(
+            r#"<w:r><w:rPr><w:b/></w:rPr><w:t>{Na</w:t></w:r>"#,
+            r#"<w:r><w:rPr><w:i/></w:rPr><w:t>me}</w:t></w:r>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("Alice"), "placeholder with rPr between runs not replaced: {}", result);
+        assert!(!result.contains("{Na"), "leftover fragment: {}", result);
+        assert!(result.contains("<w:rPr><w:b/></w:rPr>"), "formatting should be preserved: {}", result);
+        assert!(result.contains("<w:rPr><w:i/></w:rPr>"), "formatting should be preserved: {}", result);
+    }
+
+    #[test]
+    fn replace_with_empty_value() {
+        let xml = r#"<w:p><w:r><w:t>Hello {Name}!</w:t></w:r></w:p>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "")]);
+        assert_eq!(result, r#"<w:p><w:r><w:t>Hello !</w:t></w:r></w:p>"#);
+    }
+
+    #[test]
+    fn replace_value_containing_curly_braces() {
+        let xml = r#"<w:r><w:t>{Name}</w:t></w:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "{Alice}")]);
+        assert_eq!(result, r#"<w:r><w:t>{Alice}</w:t></w:r>"#);
+
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "a}b{c")]);
+        assert_eq!(result, r#"<w:r><w:t>a}b{c</w:t></w:r>"#);
+    }
+
+    #[test]
+    fn replace_with_multiline_value() {
+        let xml = r#"<w:r><w:t>{Name}</w:t></w:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "line1\nline2\nline3")]);
+        assert_eq!(result, r#"<w:r><w:t>line1
+line2
+line3</w:t></w:r>"#);
+    }
+
+    #[test]
+    fn replace_same_placeholder_many_occurrences() {
+        let xml = concat!(
+            r#"<w:r><w:t>{x}</w:t></w:r>"#,
+            r#"<w:r><w:t>{x}</w:t></w:r>"#,
+            r#"<w:r><w:t>{x}</w:t></w:r>"#,
+            r#"<w:r><w:t>{x}</w:t></w:r>"#,
+            r#"<w:r><w:t>{x}</w:t></w:r>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{x}", "V")]);
+        assert!(!result.contains("{x}"), "not all occurrences replaced: {}", result);
+        assert_eq!(result.matches("V").count(), 5, "expected 5 replacements: {}", result);
+    }
+
+    #[test]
+    fn drawingml_a_t_tags_not_replaced() {
+        let xml = r#"<a:p><a:r><a:t>{placeholder}</a:t></a:r></a:p>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{placeholder}", "replaced")]);
+        assert!(
+            result.contains("{placeholder}"),
+            "DrawingML <a:t> tags should not be matched, but placeholder was replaced: {}",
+            result
+        );
+        assert!(
+            !result.contains("replaced"),
+            "DrawingML <a:t> tags should not be matched, but replacement value found: {}",
+            result
+        );
+    }
+
+    fn create_test_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::write::ZipWriter::new(&mut buf);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            for &(name, content) in files {
+                zip.start_file(name, options).unwrap();
+                zip.write_all(content).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        buf.into_inner()
+    }
+
+    #[test]
+    fn build_docx_replaces_in_footnotes_xml() {
+        let footnotes_xml = concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            r#"<w:footnotes>"#,
+            r#"<w:footnote w:id="1"><w:p><w:r><w:t>{Source}</w:t></w:r></w:p></w:footnote>"#,
+            r#"</w:footnotes>"#,
+        );
+        let doc_xml = r#"<?xml version="1.0" encoding="UTF-8"?><w:document><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:body></w:document>"#;
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/footnotes.xml", footnotes_xml.as_bytes()),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[("{Source}", "Wikipedia")]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut xml = String::new();
+        archive.by_name("word/footnotes.xml").unwrap().read_to_string(&mut xml).unwrap();
+        assert!(xml.contains("Wikipedia"), "placeholder in footnotes.xml not replaced: {}", xml);
+        assert!(!xml.contains("{Source}"), "placeholder still present: {}", xml);
+    }
+
+    #[test]
+    fn build_docx_replaces_in_endnotes_xml() {
+        let endnotes_xml = concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            r#"<w:endnotes>"#,
+            r#"<w:endnote w:id="1"><w:p><w:r><w:t>{Citation}</w:t></w:r></w:p></w:endnote>"#,
+            r#"</w:endnotes>"#,
+        );
+        let doc_xml = r#"<?xml version="1.0" encoding="UTF-8"?><w:document><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:body></w:document>"#;
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/endnotes.xml", endnotes_xml.as_bytes()),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[("{Citation}", "Doe 2024")]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut xml = String::new();
+        archive.by_name("word/endnotes.xml").unwrap().read_to_string(&mut xml).unwrap();
+        assert!(xml.contains("Doe 2024"), "placeholder in endnotes.xml not replaced: {}", xml);
+        assert!(!xml.contains("{Citation}"), "placeholder still present: {}", xml);
+    }
+
+    #[test]
+    fn build_docx_replaces_in_comments_xml() {
+        let comments_xml = concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            r#"<w:comments>"#,
+            r#"<w:comment w:id="0"><w:p><w:r><w:t>{Note}</w:t></w:r></w:p></w:comment>"#,
+            r#"</w:comments>"#,
+        );
+        let doc_xml = r#"<?xml version="1.0" encoding="UTF-8"?><w:document><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:body></w:document>"#;
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/comments.xml", comments_xml.as_bytes()),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[("{Note}", "Approved")]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut xml = String::new();
+        archive.by_name("word/comments.xml").unwrap().read_to_string(&mut xml).unwrap();
+        assert!(xml.contains("Approved"), "placeholder in comments.xml not replaced: {}", xml);
+        assert!(!xml.contains("{Note}"), "placeholder still present: {}", xml);
+    }
+
+    #[test]
+    fn build_docx_replaces_across_multiple_xml_files() {
+        let doc_xml = r#"<?xml version="1.0"?><w:document><w:body><w:p><w:r><w:t>{Body}</w:t></w:r></w:p></w:body></w:document>"#;
+        let header_xml = r#"<?xml version="1.0"?><w:hdr><w:p><w:r><w:t>{Header}</w:t></w:r></w:p></w:hdr>"#;
+        let footer_xml = r#"<?xml version="1.0"?><w:ftr><w:p><w:r><w:t>{Footer}</w:t></w:r></w:p></w:ftr>"#;
+        let footnotes_xml = r#"<?xml version="1.0"?><w:footnotes><w:footnote w:id="1"><w:p><w:r><w:t>{FNote}</w:t></w:r></w:p></w:footnote></w:footnotes>"#;
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/header1.xml", header_xml.as_bytes()),
+            ("word/footer1.xml", footer_xml.as_bytes()),
+            ("word/footnotes.xml", footnotes_xml.as_bytes()),
+        ]);
+        let result = __private::build_docx_bytes(
+            &template,
+            &[("{Body}", "Main"), ("{Header}", "Top"), ("{Footer}", "Bottom"), ("{FNote}", "Ref1")],
+        ).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        for (file, expected, placeholder) in [
+            ("word/document.xml", "Main", "{Body}"),
+            ("word/header1.xml", "Top", "{Header}"),
+            ("word/footer1.xml", "Bottom", "{Footer}"),
+            ("word/footnotes.xml", "Ref1", "{FNote}"),
+        ] {
+            let mut xml = String::new();
+            archive.by_name(file).unwrap().read_to_string(&mut xml).unwrap();
+            assert!(xml.contains(expected), "{} not replaced in {}: {}", placeholder, file, xml);
+            assert!(!xml.contains(placeholder), "{} still present in {}: {}", placeholder, file, xml);
+        }
+    }
+
+    #[test]
+    fn build_docx_preserves_non_xml_files() {
+        let doc_xml = r#"<w:document><w:body><w:p><w:r><w:t>Hi</w:t></w:r></w:p></w:body></w:document>"#;
+        let image_bytes: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFE];
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/media/image1.png", image_bytes),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut output_image = Vec::new();
+        archive.by_name("word/media/image1.png").unwrap().read_to_end(&mut output_image).unwrap();
+        assert_eq!(output_image, image_bytes, "binary content should be preserved unchanged");
+    }
+
+    #[test]
+    fn build_docx_does_not_replace_in_non_xml() {
+        let doc_xml = r#"<w:document><w:body><w:p><w:r><w:t>Hi</w:t></w:r></w:p></w:body></w:document>"#;
+        let bin_content = b"some binary with {Name} placeholder text";
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/embeddings/data.bin", bin_content),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[("{Name}", "Alice")]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut output_bin = Vec::new();
+        archive.by_name("word/embeddings/data.bin").unwrap().read_to_end(&mut output_bin).unwrap();
+        assert_eq!(output_bin, bin_content.as_slice(), ".bin file should not have replacements applied");
+    }
+
+    #[test]
     fn build_docx_bytes_replaces_content() {
         let template_path = Path::new("../test-crate/templates/HelloWorld.docx");
         if !template_path.exists() {
