@@ -18,7 +18,8 @@ use syn::{parse_str, LitStr};
 use codegen::generate_struct;
 use docx_extract::{
     collect_text_from_document_children, collect_text_from_footer_children,
-    collect_text_from_header_children, is_valid_docx_file, print_docxide_message,
+    collect_text_from_header_children, extract_text_from_xml_tags, is_valid_docx_file,
+    print_docxide_message,
 };
 use naming::derive_type_name_from_filename;
 use placeholders::generate_struct_content;
@@ -122,6 +123,8 @@ pub fn generate_templates(input: TokenStream) -> TokenStream {
         for (_, footer) in section.get_footers() {
             corpus.extend(collect_text_from_footer_children(&footer.children));
         }
+
+        corpus.extend(extract_text_from_xml_tags(&buf, &["<a:t", "<m:t"]));
 
         let content = generate_struct_content(corpus);
 

@@ -4,6 +4,7 @@ use docx_rs::{
     TextBoxContentChild,
 };
 use file_format::FileFormat;
+use std::io::{Cursor, Read};
 use std::path::Path;
 
 pub(crate) fn collect_text_from_document_children(children: Vec<DocumentChild>) -> Vec<String> {
@@ -132,6 +133,64 @@ fn collect_text_from_textbox_content(children: &[TextBoxContentChild]) -> Vec<St
             TextBoxContentChild::Table(t) => texts.extend(collect_text_from_table(t)),
         }
     }
+    texts
+}
+
+/// Extracts text content from multiple XML tag types in a single zip pass.
+/// Each `open_prefix` (e.g. `"<a:t"`) is paired with a close tag derived
+/// automatically (e.g. `"</a:t>"`).
+pub(crate) fn extract_text_from_xml_tags(docx_bytes: &[u8], open_prefixes: &[&str]) -> Vec<String> {
+    let tags: Vec<(&str, String)> = open_prefixes
+        .iter()
+        .map(|p| (*p, format!("</{}", &p[1..])))
+        .collect();
+
+    let mut texts = Vec::new();
+    let cursor = Cursor::new(docx_bytes);
+    let mut archive = match zip::ZipArchive::new(cursor) {
+        Ok(a) => a,
+        Err(_) => return texts,
+    };
+
+    for i in 0..archive.len() {
+        let mut file = match archive.by_index(i) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        if !file.name().ends_with(".xml") {
+            continue;
+        }
+        let mut xml = String::new();
+        if file.read_to_string(&mut xml).is_err() {
+            continue;
+        }
+
+        for (open_prefix, close_tag) in &tags {
+            let mut search_start = 0;
+            while let Some(tag_start) = xml[search_start..].find(open_prefix) {
+                let tag_start = search_start + tag_start;
+                let after_prefix = tag_start + open_prefix.len();
+                if after_prefix < xml.len() && !matches!(xml.as_bytes()[after_prefix], b'>' | b' ') {
+                    search_start = after_prefix;
+                    continue;
+                }
+                let content_start = match xml[tag_start..].find('>') {
+                    Some(pos) => tag_start + pos + 1,
+                    None => break,
+                };
+                let content_end = match xml[content_start..].find(close_tag.as_str()) {
+                    Some(pos) => content_start + pos,
+                    None => break,
+                };
+                let text = xml[content_start..content_end].to_string();
+                if !text.is_empty() {
+                    texts.push(text);
+                }
+                search_start = content_end + close_tag.len();
+            }
+        }
+    }
+
     texts
 }
 

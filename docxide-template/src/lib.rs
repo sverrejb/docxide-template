@@ -129,22 +129,27 @@ fn escape_xml(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-fn replace_placeholders_in_xml(xml: &str, replacements: &[(&str, &str)]) -> String {
+fn replace_for_tag(xml: &str, replacements: &[(&str, &str)], open_prefix: &str, close_tag: &str) -> String {
     let mut text_spans: Vec<(usize, usize, String)> = Vec::new();
     let mut search_start = 0;
-    while let Some(tag_start) = xml[search_start..].find("<w:t") {
+    while let Some(tag_start) = xml[search_start..].find(open_prefix) {
         let tag_start = search_start + tag_start;
+        let after_prefix = tag_start + open_prefix.len();
+        if after_prefix < xml.len() && !matches!(xml.as_bytes()[after_prefix], b'>' | b' ') {
+            search_start = after_prefix;
+            continue;
+        }
         let content_start = match xml[tag_start..].find('>') {
             Some(pos) => tag_start + pos + 1,
             None => break,
         };
-        let content_end = match xml[content_start..].find("</w:t>") {
+        let content_end = match xml[content_start..].find(close_tag) {
             Some(pos) => content_start + pos,
             None => break,
         };
         let text = xml[content_start..content_end].to_string();
         text_spans.push((content_start, content_end, text));
-        search_start = content_end + 6;
+        search_start = content_end + close_tag.len();
     }
 
     if text_spans.is_empty() {
@@ -203,6 +208,12 @@ fn replace_placeholders_in_xml(xml: &str, replacements: &[(&str, &str)]) -> Stri
     }
 
     result
+}
+
+fn replace_placeholders_in_xml(xml: &str, replacements: &[(&str, &str)]) -> String {
+    let result = replace_for_tag(xml, replacements, "<w:t", "</w:t>");
+    let result = replace_for_tag(&result, replacements, "<a:t", "</a:t>");
+    replace_for_tag(&result, replacements, "<m:t", "</m:t>")
 }
 
 #[cfg(test)]
@@ -762,19 +773,154 @@ line3</w:t></w:r>"#);
     }
 
     #[test]
-    fn drawingml_a_t_tags_not_replaced() {
+    fn drawingml_a_t_tags_are_replaced() {
         let xml = r#"<a:p><a:r><a:t>{placeholder}</a:t></a:r></a:p>"#;
         let result = replace_placeholders_in_xml(xml, &[("{placeholder}", "replaced")]);
         assert!(
-            result.contains("{placeholder}"),
-            "DrawingML <a:t> tags should not be matched, but placeholder was replaced: {}",
+            result.contains("replaced"),
+            "DrawingML <a:t> tags should be replaced: {}",
             result
         );
         assert!(
-            !result.contains("replaced"),
-            "DrawingML <a:t> tags should not be matched, but replacement value found: {}",
+            !result.contains("{placeholder}"),
+            "DrawingML <a:t> placeholder should not remain: {}",
             result
         );
+    }
+
+    #[test]
+    fn drawingml_a_t_split_across_runs() {
+        let xml = r#"<a:r><a:t>{Na</a:t></a:r><a:r><a:t>me}</a:t></a:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("Alice"), "split <a:t> placeholder not replaced: {}", result);
+        assert!(!result.contains("{Na"), "leftover fragment: {}", result);
+    }
+
+    #[test]
+    fn drawingml_a_t_escapes_xml() {
+        let xml = r#"<a:t>{Name}</a:t>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice & Bob")]);
+        assert_eq!(result, r#"<a:t>Alice &amp; Bob</a:t>"#);
+    }
+
+    #[test]
+    fn wt_and_at_processed_independently() {
+        let xml = r#"<w:r><w:t>{wt_val}</w:t></w:r><a:r><a:t>{at_val}</a:t></a:r>"#;
+        let result = replace_placeholders_in_xml(
+            xml,
+            &[("{wt_val}", "Word"), ("{at_val}", "Drawing")],
+        );
+        assert!(result.contains("Word"), "w:t not replaced: {}", result);
+        assert!(result.contains("Drawing"), "a:t not replaced: {}", result);
+        assert!(!result.contains("{wt_val}"), "w:t placeholder remains: {}", result);
+        assert!(!result.contains("{at_val}"), "a:t placeholder remains: {}", result);
+    }
+
+    #[test]
+    fn math_m_t_tags_replaced() {
+        let xml = r#"<m:r><m:t>{formula}</m:t></m:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{formula}", "x+1")]);
+        assert_eq!(result, r#"<m:r><m:t>x+1</m:t></m:r>"#);
+    }
+
+    #[test]
+    fn drawingml_a_t_with_attributes() {
+        let xml = r#"<a:t xml:space="preserve">{placeholder}</a:t>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{placeholder}", "value")]);
+        assert_eq!(result, r#"<a:t xml:space="preserve">value</a:t>"#);
+    }
+
+    // -- Tag boundary validation tests --
+    // Ensures <w:t, <a:t, <m:t prefixes don't false-match longer tag names
+
+    #[test]
+    fn wt_prefix_does_not_match_w_tab() {
+        let xml = r#"<w:r><w:tab/><w:t>{Name}</w:t></w:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert_eq!(result, r#"<w:r><w:tab/><w:t>Alice</w:t></w:r>"#);
+    }
+
+    #[test]
+    fn wt_prefix_does_not_match_w_tbl() {
+        let xml = r#"<w:tbl><w:tr><w:tc><w:p><w:r><w:t>{Val}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Val}", "OK")]);
+        assert!(result.contains("OK"), "placeholder not replaced: {}", result);
+        assert!(!result.contains("{Val}"), "placeholder remains: {}", result);
+    }
+
+    #[test]
+    fn at_prefix_does_not_match_a_tab() {
+        let xml = r#"<a:p><a:r><a:tab/><a:t>{Name}</a:t></a:r></a:p>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("<a:tab/>"), "a:tab should be untouched: {}", result);
+        assert!(result.contains("Alice"), "placeholder not replaced: {}", result);
+    }
+
+    #[test]
+    fn at_prefix_does_not_match_a_tbl_or_a_tc() {
+        let xml = concat!(
+            r#"<a:tbl><a:tr><a:tc><a:txBody>"#,
+            r#"<a:p><a:r><a:t>{Cell}</a:t></a:r></a:p>"#,
+            r#"</a:txBody></a:tc></a:tr></a:tbl>"#,
+        );
+        let result = replace_placeholders_in_xml(xml, &[("{Cell}", "Data")]);
+        assert!(result.contains("Data"), "placeholder not replaced: {}", result);
+        assert!(!result.contains("{Cell}"), "placeholder remains: {}", result);
+    }
+
+    #[test]
+    fn self_closing_tags_are_skipped() {
+        let xml = r#"<a:t/><a:t>{Name}</a:t>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Alice")]);
+        assert!(result.contains("<a:t/>"), "self-closing tag should be untouched: {}", result);
+        assert!(result.contains("Alice"), "placeholder not replaced: {}", result);
+    }
+
+    #[test]
+    fn mt_prefix_does_not_match_longer_math_tags() {
+        let xml = r#"<m:type>ignored</m:type><m:r><m:t>{X}</m:t></m:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{X}", "42")]);
+        assert!(result.contains("ignored"), "m:type content should be untouched: {}", result);
+        assert!(result.contains("42"), "placeholder not replaced: {}", result);
+    }
+
+    #[test]
+    fn mixed_similar_tags_only_replaces_correct_ones() {
+        let xml = concat!(
+            r#"<w:tab/>"#,
+            r#"<w:tbl><w:tr><w:tc></w:tc></w:tr></w:tbl>"#,
+            r#"<w:r><w:t>{word}</w:t></w:r>"#,
+            r#"<a:tab/>"#,
+            r#"<a:tbl><a:tr><a:tc></a:tc></a:tr></a:tbl>"#,
+            r#"<a:r><a:t>{draw}</a:t></a:r>"#,
+            r#"<m:r><m:t>{math}</m:t></m:r>"#,
+        );
+        let result = replace_placeholders_in_xml(
+            xml,
+            &[("{word}", "W"), ("{draw}", "D"), ("{math}", "M")],
+        );
+        assert!(result.contains("<w:tab/>"), "w:tab modified");
+        assert!(result.contains("<a:tab/>"), "a:tab modified");
+        assert_eq!(result.matches("W").count(), 1);
+        assert_eq!(result.matches("D").count(), 1);
+        assert_eq!(result.matches("M").count(), 1);
+        assert!(!result.contains("{word}"));
+        assert!(!result.contains("{draw}"));
+        assert!(!result.contains("{math}"));
+    }
+
+    #[test]
+    fn prefix_at_end_of_string_does_not_panic() {
+        let xml = "some text<a:t";
+        let result = replace_placeholders_in_xml(xml, &[("{x}", "y")]);
+        assert_eq!(result, xml);
+    }
+
+    #[test]
+    fn w_t_with_space_preserve_attribute() {
+        let xml = r#"<w:r><w:t xml:space="preserve"> {Name} </w:t></w:r>"#;
+        let result = replace_placeholders_in_xml(xml, &[("{Name}", "Bob")]);
+        assert!(result.contains("Bob"), "placeholder not replaced: {}", result);
     }
 
     fn create_test_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
@@ -919,6 +1065,28 @@ line3</w:t></w:r>"#);
         let mut output_bin = Vec::new();
         archive.by_name("word/embeddings/data.bin").unwrap().read_to_end(&mut output_bin).unwrap();
         assert_eq!(output_bin, bin_content.as_slice(), ".bin file should not have replacements applied");
+    }
+
+    #[test]
+    fn build_docx_replaces_in_drawingml_xml() {
+        let diagram_xml = concat!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            r#"<dgm:dataModel>"#,
+            r#"<dgm:ptLst><dgm:pt><dgm:t><a:bodyPr/><a:p><a:r><a:t>{shape_text}</a:t></a:r></a:p></dgm:t></dgm:pt></dgm:ptLst>"#,
+            r#"</dgm:dataModel>"#,
+        );
+        let doc_xml = r#"<?xml version="1.0"?><w:document><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p></w:body></w:document>"#;
+        let template = create_test_zip(&[
+            ("word/document.xml", doc_xml.as_bytes()),
+            ("word/diagrams/data1.xml", diagram_xml.as_bytes()),
+        ]);
+        let result = __private::build_docx_bytes(&template, &[("{shape_text}", "Replaced!")]).unwrap();
+        let cursor = Cursor::new(&result);
+        let mut archive = zip::ZipArchive::new(cursor).unwrap();
+        let mut xml = String::new();
+        archive.by_name("word/diagrams/data1.xml").unwrap().read_to_string(&mut xml).unwrap();
+        assert!(xml.contains("Replaced!"), "placeholder in DrawingML data1.xml not replaced: {}", xml);
+        assert!(!xml.contains("{shape_text}"), "placeholder still present: {}", xml);
     }
 
     #[test]

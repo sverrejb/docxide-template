@@ -162,5 +162,131 @@ mod tests {
         assert!(!all.contains("cell_label"), "placeholder still present");
         assert!(!all.contains("cell_value"), "placeholder still present");
     }
+
+    // -- Formatted runs (bold/italic/underlined placeholders) --
+
+    #[test]
+    fn formatted_runs_struct_has_fields() {
+        let f = FormattedRuns::new("Bold", "Mixed", "Underlined", "ABC");
+        assert_eq!(f.bold_field, "Bold");
+        assert_eq!(f.mixed_format, "Mixed");
+        assert_eq!(f.underlined_field, "Underlined");
+        assert_eq!(f.abc, "ABC");
+    }
+
+    #[test]
+    fn formatted_runs_to_bytes_replaces() {
+        let f = FormattedRuns::new("BoldVal", "MixedVal", "UnderVal", "ABCVal");
+        let bytes = f.to_bytes().unwrap();
+        let xml = read_zip_entry(&bytes, "word/document.xml");
+        assert!(xml.contains("BoldVal"), "bold_field not replaced");
+        assert!(xml.contains("MixedVal"), "mixed_format not replaced");
+        assert!(xml.contains("UnderVal"), "underlined_field not replaced");
+        assert!(xml.contains("ABCVal"), "abc not replaced");
+        assert!(!xml.contains("{BoldField}"), "placeholder still present");
+        assert!(!xml.contains("{ABC}"), "placeholder still present");
+    }
+
+    // -- Split runs template --
+
+    #[test]
+    fn split_runs_template_to_bytes_replaces() {
+        let s = SplitRunsTemplate::new("Jane", "Acme Corp");
+        let bytes = s.to_bytes().unwrap();
+        let xml = read_zip_entry(&bytes, "word/document.xml");
+        assert!(xml.contains("Jane"), "first_name not replaced");
+        assert!(xml.contains("Acme Corp"), "company_name not replaced");
+        assert!(!xml.contains("FirstName"), "placeholder still present");
+        assert!(!xml.contains("CompanyName"), "placeholder still present");
+    }
+
+    // -- Unicode placeholders --
+
+    #[test]
+    fn unicode_placeholders_struct_has_fields() {
+        let u = UnicodePlaceholders::new(
+            "Ola", "Equinor", "Pilsner", "0.5L", "Jane", "ORD-123", "C-2024-1", "v2.1",
+        );
+        assert_eq!(u.fornavn, "Ola");
+        assert_eq!(u.bedriftsnavn, "Equinor");
+        assert_eq!(u.øltype, "Pilsner");
+        assert_eq!(u.størrelse, "0.5L");
+        assert_eq!(u.first_name, "Jane");
+        assert_eq!(u.order_number, "ORD-123");
+        assert_eq!(u.case2024_id, "C-2024-1");
+        assert_eq!(u.app_version, "v2.1");
+    }
+
+    // -- Empty document --
+
+    #[test]
+    fn empty_document_generates_unit_struct() {
+        use docxide_template::DocxTemplate;
+        let e = EmptyDocument;
+        assert!(e.replacements().is_empty());
+    }
+
+    // -- Cross-cutting concerns --
+
+    #[test]
+    fn xml_escaping_in_table_cells() {
+        let t = TablePlaceholders::new("Alice & Bob", "<Oslo>");
+        let bytes = t.to_bytes().unwrap();
+        let xml = read_zip_entry(&bytes, "word/document.xml");
+        assert!(xml.contains("Alice &amp; Bob"), "ampersand not escaped in table cell: {}", xml);
+        assert!(xml.contains("&lt;Oslo&gt;"), "angle brackets not escaped in table cell: {}", xml);
+        assert!(!xml.contains("Alice & Bob"), "raw ampersand should be escaped");
+        assert!(!xml.contains("<Oslo>"), "raw angle brackets should be escaped");
+    }
+
+    #[test]
+    fn xml_escaping_in_combined_areas() {
+        let c = CombinedAreas::new("A & B", "x < y", "1 > 0", "R&D \"Report\"", "page'7");
+        let bytes = c.to_bytes().unwrap();
+        let all = all_xml_content(&bytes);
+        assert!(all.contains("A &amp; B"), "ampersand not escaped in body");
+        assert!(all.contains("x &lt; y"), "less-than not escaped in table");
+        assert!(all.contains("1 &gt; 0"), "greater-than not escaped in table");
+        assert!(all.contains("R&amp;D &quot;Report&quot;"), "quote not escaped in header");
+        assert!(all.contains("page&apos;7"), "apostrophe not escaped in footer");
+    }
+
+    #[test]
+    fn to_bytes_output_is_valid_zip_for_all_templates() {
+        let templates: Vec<Vec<u8>> = vec![
+            HelloWorld::new("A", "B").to_bytes().unwrap(),
+            TablePlaceholders::new("A", "B").to_bytes().unwrap(),
+            HeadFootTest::new("A", "B", "C", "D").to_bytes().unwrap(),
+            CombinedAreas::new("A", "B", "C", "D", "E").to_bytes().unwrap(),
+            TextboxTemplate::new("A", "B", "C").to_bytes().unwrap(),
+            FormattedRuns::new("A", "B", "C", "D").to_bytes().unwrap(),
+            SplitRunsTemplate::new("A", "B").to_bytes().unwrap(),
+        ];
+        for (i, bytes) in templates.iter().enumerate() {
+            assert!(!bytes.is_empty(), "template {} produced empty output", i);
+            let cursor = Cursor::new(bytes);
+            let archive = zip::ZipArchive::new(cursor);
+            assert!(archive.is_ok(), "template {} produced invalid zip: {:?}", i, archive.err());
+            assert!(archive.unwrap().len() > 0, "template {} zip has no entries", i);
+        }
+    }
+
+    #[test]
+    fn save_and_to_bytes_produce_same_xml() {
+        let hw = HelloWorld::new("SaveTest", "BytesTest");
+        let bytes_output = hw.to_bytes().unwrap();
+
+        let tmp_dir = std::env::temp_dir().join("docxide_test_save_vs_bytes");
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let save_path = tmp_dir.join("compare");
+        hw.save(&save_path).unwrap();
+
+        let saved_bytes = std::fs::read(save_path.with_extension("docx")).unwrap();
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+
+        let to_bytes_xml = all_xml_content(&bytes_output);
+        let saved_xml = all_xml_content(&saved_bytes);
+        assert_eq!(to_bytes_xml, saved_xml, "save() and to_bytes() should produce identical XML");
+    }
 }
 
