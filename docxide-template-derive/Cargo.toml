@@ -1,7 +1,8 @@
 [package]
 name = "docxide-template-derive"
-version = "1.2.0"
+version = "1.2.1"
 edition = "2021"
+rust-version = "1.88"
 description = "Proc-macro internals for docxide-template — do not depend on this directly"
 license = "MIT"
 repository = "https://github.com/sverrejb/docxide-template"
