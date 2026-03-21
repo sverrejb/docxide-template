@@ -226,6 +226,54 @@ mod tests {
         assert!(e.replacements().is_empty());
     }
 
+    // -- Polymorphism via DocxTemplate trait --
+
+    #[test]
+    fn trait_object_to_bytes() {
+        use docxide_template::DocxTemplate;
+        let hw = HelloWorld::new("Poly", "Test");
+        let template: &dyn DocxTemplate = &hw;
+        let bytes = template.to_bytes().unwrap();
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn generic_function_over_docx_template() {
+        use docxide_template::DocxTemplate;
+        fn to_bytes_generic<T: DocxTemplate>(t: &T) -> Vec<u8> {
+            t.to_bytes().unwrap()
+        }
+        let hw = HelloWorld::new("Gen", "Test");
+        let bytes = to_bytes_generic(&hw);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn vec_of_trait_objects() {
+        use docxide_template::DocxTemplate;
+        let templates: Vec<Box<dyn DocxTemplate>> = vec![
+            Box::new(HelloWorld::new("A", "B")),
+            Box::new(TablePlaceholders::new("C", "D")),
+        ];
+        for t in &templates {
+            let bytes = t.to_bytes().unwrap();
+            assert!(!bytes.is_empty());
+        }
+    }
+
+    #[test]
+    fn trait_object_save() {
+        use docxide_template::DocxTemplate;
+        let hw = HelloWorld::new("TraitSave", "Test");
+        let template: &dyn DocxTemplate = &hw;
+        let tmp_dir = std::env::temp_dir().join("docxide_test_trait_save");
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let save_path = tmp_dir.join("trait_save.docx");
+        template.save(&save_path).unwrap();
+        assert!(save_path.exists());
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
     // -- Cross-cutting concerns --
 
     #[test]

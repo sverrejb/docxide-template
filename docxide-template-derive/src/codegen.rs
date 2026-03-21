@@ -11,36 +11,25 @@ pub(crate) fn generate_struct(
     let has_fields = !fields.is_empty();
     let abs_path_lit = syn::LitStr::new(abs_path, proc_macro::Span::call_site().into());
 
-    let save_and_bytes = if embed {
+    let to_bytes_impl = if embed {
         quote! {
-            const TEMPLATE_BYTES: &'static [u8] = include_bytes!(#abs_path_lit);
-
-            pub fn save<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), docxide_template::TemplateError> {
-                use docxide_template::DocxTemplate;
-                docxide_template::__private::save_docx_bytes(
-                    Self::TEMPLATE_BYTES,
-                    path.as_ref().with_extension("docx").as_path(),
-                    &self.replacements(),
-                )
-            }
-
-            pub fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
-                use docxide_template::DocxTemplate;
+            fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
                 docxide_template::__private::build_docx_bytes(Self::TEMPLATE_BYTES, &self.replacements())
             }
         }
     } else {
         quote! {
-            pub fn save<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), docxide_template::TemplateError> {
-                docxide_template::__private::save_docx(self, path.as_ref().with_extension("docx"))
-            }
-
-            pub fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
-                use docxide_template::DocxTemplate;
+            fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
                 let template_bytes = std::fs::read(self.template_path())?;
                 docxide_template::__private::build_docx_bytes(&template_bytes, &self.replacements())
             }
         }
+    };
+
+    let embed_const = if embed {
+        quote! { const TEMPLATE_BYTES: &'static [u8] = include_bytes!(#abs_path_lit); }
+    } else {
+        quote! {}
     };
 
     if has_fields {
@@ -50,16 +39,22 @@ pub(crate) fn generate_struct(
                 #(pub #fields: String,)*
             }
 
-            impl docxide_template::__private::Sealed for #type_ident {}
-
             impl #type_ident {
+                #embed_const
+
                 pub fn new(#(#fields: impl Into<String>),*) -> Self {
                     Self {
                         #(#fields: #fields.into()),*
                     }
                 }
 
-                #save_and_bytes
+                pub fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
+                    <Self as docxide_template::DocxTemplate>::to_bytes(self)
+                }
+
+                pub fn save<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), docxide_template::TemplateError> {
+                    <Self as docxide_template::DocxTemplate>::save(self, path.as_ref().with_extension("docx").as_path())
+                }
             }
 
             impl docxide_template::DocxTemplate for #type_ident {
@@ -70,6 +65,8 @@ pub(crate) fn generate_struct(
                 fn replacements(&self) -> Vec<(&str, &str)> {
                     vec![#( (#replacement_placeholders, self.#replacement_fields.as_str()), )*]
                 }
+
+                #to_bytes_impl
             }
         }
     } else {
@@ -77,10 +74,16 @@ pub(crate) fn generate_struct(
             #[derive(Debug, Clone)]
             pub struct #type_ident;
 
-            impl docxide_template::__private::Sealed for #type_ident {}
-
             impl #type_ident {
-                #save_and_bytes
+                #embed_const
+
+                pub fn to_bytes(&self) -> Result<Vec<u8>, docxide_template::TemplateError> {
+                    <Self as docxide_template::DocxTemplate>::to_bytes(self)
+                }
+
+                pub fn save<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), docxide_template::TemplateError> {
+                    <Self as docxide_template::DocxTemplate>::save(self, path.as_ref().with_extension("docx").as_path())
+                }
             }
 
             impl docxide_template::DocxTemplate for #type_ident {
@@ -91,6 +94,8 @@ pub(crate) fn generate_struct(
                 fn replacements(&self) -> Vec<(&str, &str)> {
                     vec![]
                 }
+
+                #to_bytes_impl
             }
         }
     }

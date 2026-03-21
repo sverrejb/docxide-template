@@ -53,25 +53,44 @@ impl From<std::string::FromUtf8Error> for TemplateError {
     fn from(e: std::string::FromUtf8Error) -> Self { Self::InvalidTemplate(e.to_string()) }
 }
 
-#[doc(hidden)]
-pub trait DocxTemplate: __private::Sealed {
+/// Trait implemented by all generated template structs.
+///
+/// Enables polymorphic use of templates via `&dyn DocxTemplate` or generics:
+///
+/// ```ignore
+/// use docxide_template::DocxTemplate;
+///
+/// fn process(template: &dyn DocxTemplate) -> Result<Vec<u8>, docxide_template::TemplateError> {
+///     template.to_bytes()
+/// }
+/// ```
+pub trait DocxTemplate {
+    /// Returns the filesystem path to the original `.docx` template.
     fn template_path(&self) -> &Path;
+
+    /// Returns the list of `(placeholder, value)` pairs for substitution.
     fn replacements(&self) -> Vec<(&str, &str)>;
+
+    /// Produces the filled-in `.docx` as an in-memory byte vector.
+    fn to_bytes(&self) -> Result<Vec<u8>, TemplateError>;
+
+    /// Writes the filled-in `.docx` to the given path.
+    ///
+    /// Creates parent directories if they do not exist.
+    /// The path is used as-is — callers should include the `.docx` extension.
+    fn save(&self, path: &Path) -> Result<(), TemplateError> {
+        let bytes = self.to_bytes()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, bytes)?;
+        Ok(())
+    }
 }
 
 #[doc(hidden)]
 pub mod __private {
     use super::*;
-
-    pub trait Sealed {}
-
-    pub fn save_docx<T: DocxTemplate, P: AsRef<Path>>(
-        template: &T,
-        output_path: P,
-    ) -> Result<(), TemplateError> {
-        let template_bytes = std::fs::read(template.template_path())?;
-        save_docx_bytes(&template_bytes, output_path.as_ref(), &template.replacements())
-    }
 
     pub fn build_docx_bytes(
         template_bytes: &[u8],
@@ -105,19 +124,6 @@ pub mod __private {
 
         zip_writer.finish()?;
         Ok(output_buf.into_inner())
-    }
-
-    pub fn save_docx_bytes(
-        template_bytes: &[u8],
-        output_path: &Path,
-        replacements: &[(&str, &str)],
-    ) -> Result<(), TemplateError> {
-        let bytes = build_docx_bytes(template_bytes, replacements)?;
-        if let Some(parent) = output_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(output_path, bytes)?;
-        Ok(())
     }
 }
 

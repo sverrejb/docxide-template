@@ -50,6 +50,36 @@ Placeholders are converted to snake_case struct fields automatically:
 
 
 
+## Polymorphism
+
+All generated structs implement the `DocxTemplate` trait, which lets you write functions that accept any template type. This is useful for batch processing, pipelines, or anywhere you don't want to care about which specific template you're working with:
+
+```rust
+use docxide_template::{generate_templates, DocxTemplate, TemplateError};
+use std::path::Path;
+
+generate_templates!("templates");
+
+fn export(template: &dyn DocxTemplate, path: &Path) -> Result<(), TemplateError> {
+    template.save(path)?;
+    Ok(())
+}
+
+fn main() {
+    let documents: Vec<Box<dyn DocxTemplate>> = vec![
+        Box::new(HelloWorld::new("Alice", "Acme Corp")),
+        Box::new(Invoice::new("INV-001", "2025-01-15", "1234.00")),
+    ];
+
+    for (i, doc) in documents.iter().enumerate() {
+        let path = format!("output/doc_{i}.docx");
+        export(doc.as_ref(), Path::new(&path)).unwrap();
+    }
+}
+```
+
+The trait provides `to_bytes()`, `save()`, `replacements()`, and `template_path()`, so generic code has full access to both output generation and introspection. See the [batch export example](examples/batch_export/src/main.rs).
+
 ## Embedded templates
 
 By default, `generate_templates!` reads template files from disk at runtime. If you want a fully self-contained binary with no runtime file dependencies, enable the `embed` feature:
@@ -77,6 +107,11 @@ cargo run -p to-bytes
 **Embedded** — template bytes baked into the binary, no runtime file access needed:
 ```bash
 cargo run -p embedded
+```
+
+**Batch export** — process different template types uniformly via `dyn DocxTemplate`:
+```bash
+cargo run -p batch-export
 ```
 
 ## How it works

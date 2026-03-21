@@ -1,6 +1,6 @@
 [package]
 name = "docxide-template-derive"
-version = "1.2.1"
+version = "1.3.0"
 edition = "2021"
 rust-version = "1.88"
 description = "Proc-macro internals for docxide-template — do not depend on this directly"
