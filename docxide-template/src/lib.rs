@@ -114,7 +114,10 @@ pub mod __private {
 
             if file_name.ends_with(".xml") || file_name.ends_with(".rels") {
                 let xml = String::from_utf8(contents)?;
-                let replaced = replace_placeholders_in_xml(&xml, replacements);
+                let mut replaced = replace_placeholders_in_xml(&xml, replacements);
+                if file_name == "[Content_Types].xml" {
+                    replaced = convert_template_content_types(&replaced);
+                }
                 contents = replaced.into_bytes();
             }
 
@@ -220,6 +223,18 @@ fn replace_placeholders_in_xml(xml: &str, replacements: &[(&str, &str)]) -> Stri
     let result = replace_for_tag(xml, replacements, "<w:t", "</w:t>");
     let result = replace_for_tag(&result, replacements, "<a:t", "</a:t>");
     replace_for_tag(&result, replacements, "<m:t", "</m:t>")
+}
+
+//we do this to also support dotx/dotm files
+fn convert_template_content_types(xml: &str) -> String {
+    xml.replace(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+    )
+    .replace(
+        "application/vnd.ms-word.template.macroEnabledTemplate.main+xml",
+        "application/vnd.ms-word.document.macroEnabled.main+xml",
+    )
 }
 
 #[cfg(test)]

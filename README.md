@@ -1,6 +1,6 @@
 # Docxide Template - Type safe MS Word templates for Rust.
 
-`docxide-template` is a Rust crate for working with .docx / MS Word templates. It reads `.docx` template files, finds `{placeholder}` patterns in document text, and generates type-safe Rust structs with those placeholders as fields. The generated structs include a `save()` method that produces a new `.docx` with placeholders replaced by field values and a `to_bytes()` for outputting the raw bytes.
+`docxide-template` is a Rust crate for working with MS Word templates such as `.docx`, `.docxm`, `.dotx`, `.dotm` It reads your template files, finds `{placeholder}` patterns in document text, and generates type-safe Rust structs with those placeholders as fields. The generated structs include a `save()` method that produces a new `.docx` with placeholders replaced by field values and a `to_bytes()` for outputting the raw bytes.
 
 ## Usage
 
@@ -8,7 +8,7 @@
 cargo add docxide-template
 ```
 
-Place your `.docx` templates in a folder (e.g. `path/to/templates/`), using `{PlaceholderName}` for variables.
+Place your templates in a folder (e.g. `path/to/templates/`), containing `{PlaceholderName}` for variables.
 
 Then invoke the macro:
 
@@ -116,7 +116,7 @@ cargo run -p batch-export
 
 ## How it works
 
-1. The proc macro scans the given directory for `.docx` files at compile time
+1. The proc macro scans the given directory for template files at compile time
 2. Each file becomes a struct named after the filename (PascalCase)
 3. `{placeholder}` patterns become struct fields (snake_case)
 4. `save()` opens the original template, replaces all placeholders in the XML, and writes a new `.docx`
