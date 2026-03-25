@@ -80,15 +80,37 @@ fn main() {
 
 The trait provides `to_bytes()`, `save()`, `replacements()`, and `template_path()`, so generic code has full access to both output generation and introspection. See the [batch export example](examples/batch_export/src/main.rs).
 
-## Embedded templates
+## Deployment
 
-By default, `generate_templates!` reads template files from disk at runtime. If you want a fully self-contained binary with no runtime file dependencies, enable the `embed` feature:
+### Default: templates loaded at runtime
+
+By default, templates are read from disk when `to_bytes()` or `save()` is called. The path you pass to the macro is stored as-is, so it resolves relative to the working directory at runtime:
+
+```rust
+generate_templates!("templates");
+```
+
+This means you can build a binary and ship it alongside the template folder. As long as the relative path structure is preserved, it works from any machine:
+
+```
+my-app/
+  binary
+  templates/
+    HelloWorld.docx
+    Invoice.docx
+```
+
+Run from `my-app/` and the binary finds `templates/` just like it did during development. This is the natural layout for CI/CD artifacts, Docker images, or any deployment where you want to update templates without recompiling.
+
+### Embedded: fully self-contained binary
+
+If you don't need runtime template swapping and want a single binary with no file dependencies, enable the `embed` feature:
 
 ```bash
 cargo add docxide-template --features embed
 ```
 
-With `embed` enabled, template bytes are baked into the binary at compile time via `include_bytes!`. The same `generate_templates!` macro is used.
+With `embed` enabled, template bytes are baked into the binary at compile time via `include_bytes!`. The binary works anywhere with no template files on disk. The same `generate_templates!` macro is used.
 
 ## Examples
 
@@ -104,7 +126,7 @@ cargo run -p save-to-file
 cargo run -p to-bytes
 ```
 
-**Embedded** — template bytes baked into the binary, no runtime file access needed:
+**Embedded** — self-contained binary with templates baked in at compile time:
 ```bash
 cargo run -p embedded
 ```

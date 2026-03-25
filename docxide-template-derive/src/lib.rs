@@ -24,10 +24,11 @@ use docx_extract::{
 use naming::derive_type_name_from_filename;
 use placeholders::generate_struct_content;
 
-/// Scans a directory for `.docx` template files and generates a typed struct for each one.
+/// Scans a directory for `.docx` (and similar) template files and generates a typed struct for each one.
 ///
-/// Template paths are resolved as absolute paths at compile time, so binaries work
-/// regardless of working directory.
+/// Template paths are stored as relative paths (as written in the macro call), so at
+/// runtime they resolve against the current working directory. This means you can ship
+/// a binary alongside its template folder and it will work from any machine.
 ///
 /// With the `embed` feature enabled, template bytes are baked into the binary via
 /// `include_bytes!`, making it fully self-contained with no runtime file dependencies.
@@ -130,10 +131,12 @@ pub fn generate_templates(input: TokenStream) -> TokenStream {
 
         let abs_path = path.canonicalize().expect("Failed to canonicalize template path");
         let abs_path_str = abs_path.to_str().expect("Failed to convert path to string");
+        let rel_path_str = path.to_str().expect("Failed to convert relative path to string");
 
         let template_struct = generate_struct(
             type_ident,
             abs_path_str,
+            rel_path_str,
             &content.fields,
             &content.replacement_placeholders,
             &content.replacement_fields,

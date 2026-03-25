@@ -3,6 +3,7 @@ use quote::quote;
 pub(crate) fn generate_struct(
     type_ident: syn::Ident,
     abs_path: &str,
+    rel_path: &str,
     fields: &[syn::Ident],
     replacement_placeholders: &[syn::LitStr],
     replacement_fields: &[syn::Ident],
@@ -10,6 +11,7 @@ pub(crate) fn generate_struct(
 ) -> proc_macro2::TokenStream {
     let has_fields = !fields.is_empty();
     let abs_path_lit = syn::LitStr::new(abs_path, proc_macro::Span::call_site().into());
+    let rel_path_lit = syn::LitStr::new(rel_path, proc_macro::Span::call_site().into());
 
     let to_bytes_impl = if embed {
         quote! {
@@ -59,7 +61,7 @@ pub(crate) fn generate_struct(
 
             impl docxide_template::DocxTemplate for #type_ident {
                 fn template_path(&self) -> &std::path::Path {
-                    std::path::Path::new(#abs_path_lit)
+                    std::path::Path::new(#rel_path_lit)
                 }
 
                 fn replacements(&self) -> Vec<(&str, &str)> {
@@ -88,7 +90,7 @@ pub(crate) fn generate_struct(
 
             impl docxide_template::DocxTemplate for #type_ident {
                 fn template_path(&self) -> &std::path::Path {
-                    std::path::Path::new(#abs_path_lit)
+                    std::path::Path::new(#rel_path_lit)
                 }
 
                 fn replacements(&self) -> Vec<(&str, &str)> {
