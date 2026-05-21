@@ -80,6 +80,25 @@ fn main() {
 
 The trait provides `to_bytes()`, `save()`, `replacements()`, and `template_path()`, so generic code has full access to both output generation and introspection. See the [batch export example](examples/batch_export/src/main.rs).
 
+## PDF output via `docxide-pdf`
+
+`docxide-template` pairs naturally with [`docxide-pdf`](https://crates.io/crates/docxide-pdf) when you need PDF output instead of (or alongside) `.docx`. Pipe the bytes from `to_bytes()` straight into the converter — no intermediate file required:
+
+```rust
+use docxide_template::generate_templates;
+use docxide_pdf::convert_docx_bytes_to_pdf;
+
+generate_templates!("templates");
+
+fn main() {
+    let doc = HelloWorld::new("Alice", "Acme Corp");
+    let bytes = doc.to_bytes().unwrap();
+    convert_docx_bytes_to_pdf(&bytes, "output/hello_world.pdf").unwrap();
+}
+```
+
+The two crates share the same in-memory `.docx` representation, so you get type-safe templating from `docxide-template` and PDF rendering from `docxide-pdf` without touching the filesystem in between.
+
 ## Deployment
 
 ### Default: templates loaded at runtime
