@@ -34,8 +34,18 @@ pub(crate) fn generate_struct(
         quote! {}
     };
 
+    // Force the compiler to track the template file as a build input so editing it
+    // re-runs this macro.
+    let track_const = if embed {
+        quote! {}
+    } else {
+        quote! { const _: &[u8] = include_bytes!(#abs_path_lit); }
+    };
+
     if has_fields {
         quote! {
+            #track_const
+
             #[derive(Debug, Clone)]
             pub struct #type_ident {
                 #(pub #fields: String,)*
@@ -73,6 +83,8 @@ pub(crate) fn generate_struct(
         }
     } else {
         quote! {
+            #track_const
+
             #[derive(Debug, Clone)]
             pub struct #type_ident;
 
