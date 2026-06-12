@@ -1,7 +1,7 @@
 [package]
 name = "docxide-template"
-version = "1.4.3"
-edition = "2021"
+version = "1.4.4"
+edition = "2024"
 rust-version = "1.88"
 description = "Type-safe .docx template engine — generate Rust structs from Word templates with {placeholder} patterns"
 license = "MIT"

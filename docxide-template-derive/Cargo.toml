@@ -1,7 +1,7 @@
 [package]
 name = "docxide-template-derive"
-version = "1.4.3"
-edition = "2021"
+version = "1.4.4"
+edition = "2024"
 rust-version = "1.88"
 description = "Proc-macro internals for docxide-template — do not depend on this directly"
 license = "MIT"
@@ -9,7 +9,7 @@ repository = "https://github.com/sverrejb/docxide-template"
 readme = "README.md"
 
 [dependencies]
-file-format = { version = "0.25.0", features = ["reader-zip"] }
+file-format = { version = "0.29.0", features = ["reader-zip"] }
 heck = "0.5.0"
 docx-rs = "0.4.17"
 quote = "1.0"

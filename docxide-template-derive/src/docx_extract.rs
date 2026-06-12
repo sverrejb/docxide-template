@@ -25,9 +25,9 @@ pub(crate) fn collect_text_from_document_children(children: Vec<DocumentChild>) 
 pub(crate) fn collect_text_from_table(table: &Table) -> Vec<String> {
     let mut texts = Vec::new();
     for row in &table.rows {
-        let TableChild::TableRow(ref row) = row;
+        let TableChild::TableRow(row) = row;
         for cell in &row.cells {
-            let TableRowChild::TableCell(ref cell) = cell;
+            let TableRowChild::TableCell(cell) = cell;
             for content in &cell.children {
                 match content {
                     TableCellContent::Paragraph(p) => texts.extend(collect_text_from_paragraph(p)),
